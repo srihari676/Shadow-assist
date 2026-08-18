@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "Shadow UI - AccessLayer",
   "version": "1.0.0",
-  "description": "Universal AI Accessibility Layer for any website. Injects personalized accessibility controls, smart form filler, and meeting assistance.",
+  "description": "Universal AI Accessibility Layer for any website. Injects personalized accessibility controls, smart form filler, and SignCaption live meeting assistance.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "https://meet.google.com/*"
   ],
   "icons": {
     "16": "icons/icon-16.png",
@@ -29,16 +30,30 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["meet-inject.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["meet-bridge.js"],
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["*"],
+      "resources": ["vendor/*", "*"],
       "matches": ["<all_urls>"]
     }
   ]
