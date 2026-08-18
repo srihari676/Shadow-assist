@@ -7,10 +7,12 @@
     "storage",
     "activeTab",
     "scripting",
+    "sidePanel",
     "tts"
   ],
   "host_permissions": [
     "<all_urls>",
+    "https://openrouter.ai/*",
     "https://meet.google.com/*"
   ],
   "icons": {
@@ -37,7 +39,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["iframe-fix.js", "content.js"],
       "run_at": "document_idle"
     },
     {
