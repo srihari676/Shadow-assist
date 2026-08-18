@@ -7,8 +7,7 @@
     "storage",
     "activeTab",
     "scripting",
-    "sidePanel",
-    "tts"
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>",

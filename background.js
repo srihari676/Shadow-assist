@@ -3,4 +3,3 @@ import{a as e,d as t,l as n,n as r,s as i,u as a}from"./assets/storage-WIAz0ds7.
  * Shadow UI — background.js (entry point)
  * Imports the existing core module and the voice worker addon.
  * ===================================================================== */
-import "./voice-worker.js";
