@@ -34,9 +34,20 @@
   const PROFILE_STORAGE_KEY = "shadow_ui_user_profile";
 
   async function ensureProfileSetup() {
-    const stored = await new Promise((resolve) => {
-      chrome.storage.local.get([PROFILE_STORAGE_KEY], (result) => resolve(result[PROFILE_STORAGE_KEY]));
-    });
+    let stored;
+    try {
+      stored = await new Promise((resolve, reject) => {
+        chrome.storage.local.get([PROFILE_STORAGE_KEY], (result) => {
+          const error = chrome.runtime.lastError;
+          if (error) reject(error);
+          else resolve(result[PROFILE_STORAGE_KEY]);
+        });
+      });
+    } catch (error) {
+      console.error("[Shadow UI Voice] Extension context unavailable:", error);
+      showToast("Extension updated. Reload the page and sidebar, then try again.");
+      return false;
+    }
     if (stored?.name?.trim() && Array.isArray(stored.accessibilityNeeds)) return true;
     window.postMessage({ type: "SWITCH_TAB", payload: { tab: "accessibility" } }, "*");
     showToast("Complete your profile in the Accessibility section before using voice");
