@@ -1,0 +1,3 @@
+allowBuilds:
+  '@livekit/local-inference': true
+  esbuild: true
