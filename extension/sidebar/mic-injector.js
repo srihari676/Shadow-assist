@@ -25,12 +25,105 @@
   let micStatusCard = null;
   let micStatusValue = null;
   let micStatusBar = null;
+  let profileSetupPromise = null;
 
   const LK_HOST = "ws://localhost:7880";
   const LK_API_KEY = "devkey";
   const LK_API_SECRET = "secret";
   const LIVEKIT_ROOM_KEY = "shadow-ui-livekit-room-name";
   const LIVEKIT_PARTICIPANT_KEY = "shadow-ui-livekit-participant-name";
+  const PROFILE_STORAGE_KEY = "shadow_ui_user_profile";
+
+  async function hasCompletedProfileSetup() {
+    const stored = await new Promise((resolve) => {
+      chrome.storage.local.get([PROFILE_STORAGE_KEY], (result) => resolve(result[PROFILE_STORAGE_KEY]));
+    });
+    return Boolean(stored?.name?.trim() && Array.isArray(stored.accessibilityNeeds));
+  }
+
+  function requestProfileSetup() {
+    if (profileSetupPromise) return profileSetupPromise;
+
+    profileSetupPromise = new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.id = "shadow-ui-profile-setup";
+      overlay.innerHTML = `
+        <div class="shadow-ui-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="shadow-ui-profile-title">
+          <h2 id="shadow-ui-profile-title">Set up your profile first</h2>
+          <p>Voice assistance uses this to tailor its help to you.</p>
+          <label for="shadow-ui-profile-name">Name</label>
+          <input id="shadow-ui-profile-name" type="text" autocomplete="name" placeholder="Your name" />
+          <label for="shadow-ui-profile-needs">Accessibility focus</label>
+          <select id="shadow-ui-profile-needs">
+            <option value="">Choose one</option>
+            <option value="low_vision">Low vision</option>
+            <option value="screen_reader">Screen reader</option>
+            <option value="learning_difficulty">Learning difficulty</option>
+            <option value="attention_difficulty">Attention difficulty</option>
+            <option value="limited_hand_movement">Limited hand movement</option>
+            <option value="deaf_hard_hearing">Deaf or hard of hearing</option>
+            <option value="none">No specific focus</option>
+          </select>
+          <div class="shadow-ui-profile-actions">
+            <button type="button" data-profile-cancel>Cancel</button>
+            <button type="button" data-profile-save>Save profile</button>
+          </div>
+          <div class="shadow-ui-profile-error" aria-live="polite"></div>
+        </div>`;
+
+      const style = document.createElement("style");
+      style.textContent = `
+        #shadow-ui-profile-setup { position: fixed; inset: 0; z-index: 1000001; display: grid; place-items: center; background: rgba(15, 23, 42, .55); font-family: system-ui, sans-serif; }
+        .shadow-ui-profile-dialog { width: min(340px, calc(100vw - 32px)); padding: 22px; border-radius: 14px; background: #fff; color: #172033; box-shadow: 0 18px 45px rgba(15, 23, 42, .3); }
+        .shadow-ui-profile-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+        .shadow-ui-profile-dialog p { margin: 0 0 18px; color: #526075; font-size: 13px; line-height: 1.45; }
+        .shadow-ui-profile-dialog label { display: block; margin: 12px 0 5px; font-size: 12px; font-weight: 700; }
+        .shadow-ui-profile-dialog input, .shadow-ui-profile-dialog select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #172033; }
+        .shadow-ui-profile-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+        .shadow-ui-profile-actions button { padding: 9px 12px; border: 0; border-radius: 7px; cursor: pointer; }
+        [data-profile-cancel] { background: #e2e8f0; color: #172033; }
+        [data-profile-save] { background: #4f46e5; color: #fff; }
+        .shadow-ui-profile-error { min-height: 18px; margin-top: 8px; color: #b42318; font-size: 12px; }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(overlay);
+
+      const nameInput = overlay.querySelector("#shadow-ui-profile-name");
+      const needsInput = overlay.querySelector("#shadow-ui-profile-needs");
+      const error = overlay.querySelector(".shadow-ui-profile-error");
+      const finish = (saved) => {
+        overlay.remove();
+        style.remove();
+        profileSetupPromise = null;
+        resolve(saved);
+      };
+      overlay.querySelector("[data-profile-cancel]").addEventListener("click", () => finish(false));
+      overlay.querySelector("[data-profile-save]").addEventListener("click", async () => {
+        const name = nameInput.value.trim();
+        const need = needsInput.value;
+        if (!name || !need) {
+          error.textContent = "Enter your name and choose an accessibility focus.";
+          return;
+        }
+        await new Promise((saveResolve) => chrome.storage.local.set({
+          [PROFILE_STORAGE_KEY]: {
+            name,
+            accessibilityNeeds: [need],
+            updatedAt: new Date().toISOString(),
+          },
+        }, saveResolve));
+        finish(true);
+      });
+      nameInput.focus();
+    });
+    return profileSetupPromise;
+  }
+
+  async function ensureProfileSetup() {
+    if (await hasCompletedProfileSetup()) return true;
+    showToast("Set up your profile before using voice");
+    return await requestProfileSetup();
+  }
 
   function getOrCreateSessionValue(key, prefix) {
     try {
@@ -162,6 +255,7 @@
 
   async function startMic() {
     try {
+      if (!await ensureProfileSetup()) return;
       showToast("Connecting to voice agent...");
 
       if (!isConnected) {
