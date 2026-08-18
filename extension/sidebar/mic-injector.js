@@ -370,7 +370,9 @@
 
       const rpcMethods = [
         "describe_page", "read_element", "fill_form_field",
-        "simplify_question", "toggle_high_contrast", "toggle_large_text", "switch_tab",
+        "simplify_question", "toggle_high_contrast", "toggle_large_text",
+        "toggle_dyslexia_font", "toggle_simplified_language", "switch_tab",
+        "explain_element", "submit_form", "search_product", "add_to_cart", "extract_products",
       ];
 
       for (const method of rpcMethods) {
@@ -439,8 +441,50 @@
           await chrome.tabs.sendMessage(tab.id, { type: "SETTINGS_UPDATED", payload: { largeText: args.enabled } });
           return JSON.stringify({ result: args.enabled ? "Large text enabled." : "Large text disabled." });
         }
+        case "toggle_dyslexia_font": {
+          await chrome.tabs.sendMessage(tab.id, { type: "SETTINGS_UPDATED", payload: { dyslexiaFont: args.enabled } });
+          return JSON.stringify({ result: args.enabled ? "Dyslexia-friendly font enabled." : "Dyslexia-friendly font disabled." });
+        }
+        case "toggle_simplified_language": {
+          await chrome.tabs.sendMessage(tab.id, { type: "SETTINGS_UPDATED", payload: { simplifiedWording: args.enabled } });
+          return JSON.stringify({ result: args.enabled ? "Simplified language enabled." : "Simplified language disabled." });
+        }
         case "switch_tab": {
+          window.postMessage({ type: "SWITCH_TAB", payload: { tab: args.tab } }, "*");
           return JSON.stringify({ result: `Switched to ${args.tab} tab.` });
+        }
+        case "explain_element": {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            type: "EXPLAIN_ELEMENT_DOM",
+            payload: { elementId: args.elementId, label: args.label },
+          });
+          return JSON.stringify({ result: response?.explanation || "I could not explain that element." });
+        }
+        case "submit_form": {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            type: "SUBMIT_FORM_DOM",
+            payload: { submitButtonId: args.submitButtonId },
+          });
+          return JSON.stringify({ result: response?.success ? "Form submitted." : "I could not submit the form." });
+        }
+        case "search_product": {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            type: "SEARCH_PRODUCT_DOM",
+            payload: { query: args.query },
+          });
+          return JSON.stringify({ result: response?.result || response?.message || "Product search completed." });
+        }
+        case "add_to_cart": {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            type: "ADD_TO_CART_DOM",
+            payload: { query: args.query, quantity: args.quantity },
+          });
+          return JSON.stringify({ result: response?.result || response?.message || "Cart action completed." });
+        }
+        case "extract_products": {
+          const response = await chrome.tabs.sendMessage(tab.id, { type: "EXTRACT_PRODUCTS_DOM" });
+          const products = response?.products || [];
+          return JSON.stringify({ result: products.length ? JSON.stringify(products) : "No products found." });
         }
         default:
           return JSON.stringify({ result: `Unknown tool: ${toolName}` });

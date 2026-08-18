@@ -1,7 +1,7 @@
 /* =====================================================================
  * Access AI — LiveKit Agent (agent.ts)
  * ---------------------------------------------------------------------
- * Agent definition with all 7 tools. Each tool forwards its call to
+ * Agent definition with all 14 tools. Each tool forwards its call to
  * the frontend (side panel) via LiveKit RPC, where the side panel
  * routes it to content.js (or handles switch_tab locally).
  * ===================================================================== */
@@ -12,7 +12,7 @@ import { z } from "zod";
 // ---- System prompt (same as original background.js) ----
 const SYSTEM_PROMPT = `You are Access AI, a voice-driven accessibility assistant running inside a Chrome browser extension. You help users interact with and understand the web page currently open in their active tab.
 
-You have access to tools that run on the live page (describe_page, read_element, fill_form_field, simplify_question, toggle_high_contrast, toggle_large_text) and one tool that switches the extension's own UI tab (switch_tab, with values: "accessibility", "form_filler", or "meet_asl").
+You have access to tools that run on the live page (describe_page, read_element, fill_form_field, simplify_question, toggle_high_contrast, toggle_large_text, toggle_dyslexia_font, toggle_simplified_language, explain_element, submit_form, search_product, add_to_cart, extract_products) and one tool that switches the extension's own UI tab (switch_tab, with values: "accessibility", "form_filler", or "meet_asl").
 
 Guidelines:
 - When the user asks about the current page, call describe_page first to understand what's there.
@@ -143,6 +143,30 @@ const toggleLargeText = llm.tool({
   },
 });
 
+// ---- Tool: toggle_dyslexia_font ----
+const toggleDyslexiaFont = llm.tool({
+  name: "toggle_dyslexia_font",
+  description: "Enable or disable the page's dyslexia-friendly font mode.",
+  parameters: z.object({
+    enabled: z.boolean().describe("true to enable the font, false to disable it."),
+  }),
+  execute: async ({ enabled }) => {
+    return await forwardToFrontend("toggle_dyslexia_font", { enabled });
+  },
+});
+
+// ---- Tool: toggle_simplified_language ----
+const toggleSimplifiedLanguage = llm.tool({
+  name: "toggle_simplified_language",
+  description: "Show or remove plain-language explanations for complex page text.",
+  parameters: z.object({
+    enabled: z.boolean().describe("true to enable simplified language, false to disable it."),
+  }),
+  execute: async ({ enabled }) => {
+    return await forwardToFrontend("toggle_simplified_language", { enabled });
+  },
+});
+
 // ---- Tool: switch_tab ----
 const switchTab = llm.tool({
   name: "switch_tab",
@@ -160,6 +184,66 @@ const switchTab = llm.tool({
   },
 });
 
+// ---- Tool: explain_element ----
+const explainElement = llm.tool({
+  name: "explain_element",
+  description: "Explain what a visible page element or form field is for in plain language.",
+  parameters: z.object({
+    elementId: z.string().optional().describe("Known page element ID, if available."),
+    label: z.string().describe("Visible label or description of the element."),
+  }),
+  execute: async ({ elementId, label }) => {
+    return await forwardToFrontend("explain_element", { elementId, label });
+  },
+});
+
+// ---- Tool: submit_form ----
+const submitForm = llm.tool({
+  name: "submit_form",
+  description: "Submit the current page form, optionally targeting a specific submit button.",
+  parameters: z.object({
+    submitButtonId: z.string().optional().describe("Known submit button ID, if available."),
+  }),
+  execute: async ({ submitButtonId }) => {
+    return await forwardToFrontend("submit_form", { submitButtonId });
+  },
+});
+
+// ---- Tool: search_product ----
+const searchProduct = llm.tool({
+  name: "search_product",
+  description: "Find a product on the current shopping page by name or description.",
+  parameters: z.object({
+    query: z.string().describe("Product name or search description."),
+  }),
+  execute: async ({ query }) => {
+    return await forwardToFrontend("search_product", { query });
+  },
+});
+
+// ---- Tool: add_to_cart ----
+const addToCart = llm.tool({
+  name: "add_to_cart",
+  description: "Add a matching product on the current shopping page to the cart.",
+  parameters: z.object({
+    query: z.string().describe("Product name or description to add."),
+    quantity: z.number().int().positive().optional().describe("Number of items to add."),
+  }),
+  execute: async ({ query, quantity }) => {
+    return await forwardToFrontend("add_to_cart", { query, quantity });
+  },
+});
+
+// ---- Tool: extract_products ----
+const extractProducts = llm.tool({
+  name: "extract_products",
+  description: "Read the products currently visible on the shopping page.",
+  parameters: z.object({}),
+  execute: async () => {
+    return await forwardToFrontend("extract_products", {});
+  },
+});
+
 // ---- Create the agent ----
 export function createAgent() {
   return voice.Agent.create({
@@ -171,7 +255,14 @@ export function createAgent() {
       simplifyQuestion,
       toggleHighContrast,
       toggleLargeText,
+      toggleDyslexiaFont,
+      toggleSimplifiedLanguage,
       switchTab,
+      explainElement,
+      submitForm,
+      searchProduct,
+      addToCart,
+      extractProducts,
     ],
   });
 }
