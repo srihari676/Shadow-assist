@@ -33,6 +33,32 @@
   const LIVEKIT_PARTICIPANT_KEY = "shadow-ui-livekit-participant-name";
   const PROFILE_STORAGE_KEY = "shadow_ui_user_profile";
 
+  async function getSavedProfile() {
+    return await new Promise((resolve) => {
+      chrome.storage.local.get([PROFILE_STORAGE_KEY], (result) => {
+        if (chrome.runtime.lastError) resolve(null);
+        else resolve(result[PROFILE_STORAGE_KEY] || null);
+      });
+    });
+  }
+
+  function getProfileValue(profile, field) {
+    const text = field.toLowerCase();
+    const aliases = [
+      [["full name", "first name", "last name", "name"], "name"],
+      [["email", "e-mail"], "email"],
+      [["phone", "mobile", "telephone", "contact number"], "phone"],
+      [["postal", "zip", "postcode"], "postalCode"],
+      [["address", "street"], "address"],
+      [["city", "town"], "city"],
+      [["country", "nation"], "country"],
+      [["age"], "age"],
+    ];
+    const match = aliases.find(([names]) => names.some((name) => text.includes(name)));
+    const value = match ? profile?.[match[1]] : undefined;
+    return value === undefined || value === null ? "" : String(value);
+  }
+
   async function ensureProfileSetup() {
     let stored;
     try {
@@ -229,9 +255,15 @@
   }
 
   async function stopMic() {
+    isMicActive = false;
     try {
-      if (micTrackPub) {
+      const audioTrack = micStream?.getAudioTracks()[0];
+      if (audioTrack && room?.localParticipant) {
+        await room.localParticipant.unpublishTrack(audioTrack);
+      } else if (micTrackPub?.unpublish) {
         await micTrackPub.unpublish();
+      }
+      if (micTrackPub) {
         micTrackPub = null;
       }
       stopMicLevelMonitor();
@@ -240,7 +272,6 @@
         micStream = null;
       }
     } catch (e) {}
-    isMicActive = false;
     resetMicButton();
     showToast("Mic off");
   }
@@ -443,10 +474,14 @@
           const q = (args.field || "").toLowerCase();
           const match = fields.find(f => f.label?.toLowerCase().includes(q) || f.name?.toLowerCase().includes(q) || f.placeholder?.toLowerCase().includes(q));
           if (!match) return JSON.stringify({ result: `Couldn't find a field matching "${args.field}".` });
+          const profile = await getSavedProfile();
+          const profileValue = getProfileValue(profile, `${match.label || ""} ${match.name || ""} ${match.placeholder || ""}`);
+          const value = args.value?.trim() || profileValue;
+          if (!value) return JSON.stringify({ result: `I found "${match.label || match.name}" but need a value for it.` });
           const fieldType = match.type === "select" ? "select" : match.type === "checkbox" || match.type === "radio" ? "checkbox" : "text";
-          await chrome.tabs.sendMessage(tab.id, { type: "FILL_FIELD_DOM", payload: { fieldId: match.id, value: args.value, fieldType } });
+          await chrome.tabs.sendMessage(tab.id, { type: "FILL_FIELD_DOM", payload: { fieldId: match.id, value, fieldType } });
           await chrome.tabs.sendMessage(tab.id, { type: "HIGHLIGHT_FIELD_DOM", payload: { fieldId: match.id } });
-          return JSON.stringify({ result: `Filled "${match.label || match.name}" with "${args.value}".` });
+          return JSON.stringify({ result: `Filled "${match.label || match.name}" with "${value}".` });
         }
         case "simplify_question": {
           const formResp = await chrome.tabs.sendMessage(tab.id, { type: "ANALYZE_PAGE_FORM" });

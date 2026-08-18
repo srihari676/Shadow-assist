@@ -17,6 +17,7 @@ You have access to tools that run on the live page (describe_page, read_element,
 Guidelines:
 - When the user asks about the current page, call describe_page first to understand what's there.
 - When the user asks to fill a field, call fill_form_field with a free-text "field" description (e.g. "email", "date of birth") and the value to enter.
+- When the user asks to use their saved details or profile, call fill_form_field with the field description and omit "value" so the browser uses the stored profile detail.
 - When the user asks to read a field, call read_element with a free-text "element" description.
 - When the user asks to simplify a confusing label, call simplify_question with the field description.
 - When the user asks to turn accessibility features on or off, call toggle_high_contrast or toggle_large_text with an "enabled" boolean.
@@ -89,7 +90,7 @@ const fillFormField = llm.tool({
       .describe(
         'Free-text description of the field to fill, e.g. "email", "first name", "date of birth".'
       ),
-    value: z.string().describe("The value to enter into the field."),
+    value: z.string().optional().describe("Optional value to enter. If omitted, use the matching saved profile detail."),
   }),
   execute: async ({ field, value }) => {
     return await forwardToFrontend("fill_form_field", { field, value });
